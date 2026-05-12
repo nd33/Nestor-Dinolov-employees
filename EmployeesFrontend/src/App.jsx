@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import axios from 'axios'
 import { Container, Alert, Spinner } from 'react-bootstrap'
+import FileUploader from './FileUploader'
+import ResultsDataGrid from './ResultsDataGrid'
 import './App.css'
 
 function App() {
@@ -40,41 +42,45 @@ function App() {
     }
   }
 
-  return (
-    <Container className="mt-5">
-      <h1 className="text-center mb-4">Employee Pair Analyzer</h1>
-      <p className="text-center mb-4">
-        Find which two employees have worked together the longest
-      </p>
-      
-      <FileUploader 
-        onFileSelect={handleFileSelect}
-        onAnalyze={handleAnalyze}
-        selectedFile={selectedFile}
-        loading={loading}
-      />
-      
-      {loading && (
-        <div className="text-center mt-4">
-          <Spinner animation="border" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </Spinner>
+ return (
+    <div className="container mt-5">
+      <div className="row justify-content-center">
+        <div className="col-md-8">
+          <h1 className="text-center mb-4">👥 Employee Pair Analyzer</h1>
+          <p className="text-center mb-4 text-muted">
+            Upload a CSV file to find which two employees have worked together the longest
+          </p>
+          
+          <div className="card shadow-sm">
+            <div className="card-body">
+              <FileUploader 
+                onFileSelect={handleFileSelect}
+                onAnalyze={handleAnalyze}
+                selectedFile={selectedFile}
+                loading={loading}
+              />
+            </div>
+          </div>
+          
+          {loading && (
+            <div className="text-center mt-4">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <p className="mt-2">Processing your CSV file...</p>
+            </div>
+          )}
+          
+          {error && (
+            <div className="alert alert-danger mt-3" role="alert">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+          
+          {result && <ResultsDataGrid result={result} />}
         </div>
-      )}
-      
-      {error && (
-        <Alert variant="danger" className="mt-3">
-          {error}
-        </Alert>
-      )}
-      
-      {result && (
-        <Alert variant="success" className="mt-3">
-          <h4>Result:</h4>
-          <p>Employees {result.empId1} and {result.empId2} worked together for {result.totalDaysWorked} days</p>
-        </Alert>
-      )}
-    </Container>
+      </div>
+    </div>
   )
 }
 

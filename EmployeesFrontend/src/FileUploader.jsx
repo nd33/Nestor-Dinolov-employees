@@ -1,29 +1,41 @@
 import React from 'react'
-import { Button, Form } from 'react-bootstrap'
 
 function FileUploader({ onFileSelect, onAnalyze, selectedFile, loading }) {
   return (
-    <div className="mb-4">
-      <Form.Group controlId="formFile" className="mb-3">
-        <Form.Label>Select CSV File</Form.Label>
-        <Form.Control
+    <div>
+      <div className="mb-3">
+        <label htmlFor="formFile" className="form-label fw-bold">
+          📁 Select CSV File
+        </label>
+        <input
+          className="form-control"
           type="file"
+          id="formFile"
           accept=".csv"
           onChange={onFileSelect}
           disabled={loading}
         />
-        <Form.Text className="text-muted">
-          Upload CSV with columns: EmpID, ProjectID, DateFrom, DateTo
-        </Form.Text>
-      </Form.Group>
+        <div className="form-text text-muted mt-2">
+          File should have columns: EmpID, ProjectID, DateFrom, DateTo<br/>
+          <strong>Example row:</strong> 143, 12, 2013-11-01, 2014-01-05<br/>
+          <strong>Note:</strong> DateTo can be NULL (means today)
+        </div>
+      </div>
       
-      <Button 
-        variant="primary" 
+      <button 
+        className="btn btn-primary w-100"
         onClick={onAnalyze}
         disabled={!selectedFile || loading}
       >
-        {loading ? 'Analyzing...' : 'Analyze Employee Pairs'}
-      </Button>
+        {loading ? (
+          <>
+            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Analyzing...
+          </>
+        ) : (
+          '🔍 Analyze Employee Pairs'
+        )}
+      </button>
     </div>
   )
 }

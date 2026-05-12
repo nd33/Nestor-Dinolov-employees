@@ -19,7 +19,7 @@ public class EmployeePairController {
     @PostMapping("/analyze")
     public ResponseEntity<?> analyzeCsv(@RequestParam("file") MultipartFile file) {
         try {
-            var records = csvParserService.parseCsv(file);
+            var records = csvParserService.parseCsv(file.getOriginalFilename());
             EmployeePairResponse result = employeePairService.findLongestWorkingPair(records);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
