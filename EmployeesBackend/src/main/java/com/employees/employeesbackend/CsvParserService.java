@@ -34,6 +34,10 @@ public class CsvParserService {
             String line;
             int lineNumber = 0;
 
+            // Skip header line
+            br.readLine();
+            lineNumber++;
+
             while ((line = br.readLine()) != null) {
                 lineNumber++;
                 String[] employmentDetails = line.split(",");
