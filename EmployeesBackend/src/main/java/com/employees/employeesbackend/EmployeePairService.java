@@ -4,138 +4,140 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class EmployeePairService {
 
     /**
-     * Finds the pair of employees who worked together the longest across all projects
+     * Finds the pair of employees who worked together the longest across all projects.
      */
     public EmployeePairResponse findLongestWorkingPair(List<EmployeeProject> records) {
-        if (records == null || records.isEmpty()) {
-            throw new IllegalArgumentException("No records to analyze. Please provide valid employee data.");
-        }
+        validateRecords(records);
 
-        // Step 1: Group records by project ID
-        Map<Long, List<EmployeeProject>> projectsMap = groupByProjectId(records);
+        var pairDayMaps = calculateAllPairDays(records);
 
-        // Step 2: For each project, find all employee pairs and their overlapping days
-        // Key format: "empId1-empId2-projectId" for project-specific aggregation
-        Map<String, Long> projectPairDays = new HashMap<>();
-        // Key format: "empId1-empId2" for total across projects
-        Map<String, Long> totalPairDays = new HashMap<>();
+        return buildBestPairResponse(pairDayMaps.totalDays, pairDayMaps.projectDays);
+    }
 
-        for (Map.Entry<Long, List<EmployeeProject>> entry : projectsMap.entrySet()) {
-            Long projectId = entry.getKey();
-            List<EmployeeProject> projectEmployees = entry.getValue();
+    /**
+     * Record to hold both maps returned from calculation
+     */
+    private record PairDayMaps(Map<String, Long> totalDays, Map<String, Long> projectDays) {}
 
-            // Compare each pair of employees in this project
-            for (int i = 0; i < projectEmployees.size(); i++) {
-                for (int j = i + 1; j < projectEmployees.size(); j++) {
-                    EmployeeProject emp1 = projectEmployees.get(i);
-                    EmployeeProject emp2 = projectEmployees.get(j);
+    /**
+     * Calculates all pair days across all projects
+     */
+    private PairDayMaps calculateAllPairDays(List<EmployeeProject> records) {
+        Map<String, Long> totalDays = new HashMap<>();
+        Map<String, Long> projectDays = new HashMap<>();
 
-                    // Calculate overlapping days for this pair on this project
-                    long overlappingDays = calculateOverlappingDays(emp1, emp2);
-
-                    if (overlappingDays > 0) {
-                        String pairKey = getPairKey(emp1.getEmpId(), emp2.getEmpId());
-                        String projectPairKey = pairKey + "-" + projectId;
-
-                        // Sum days for this specific pair on this specific project
-                        // This handles multiple time periods for same pair on same project
-                        long newProjectTotal = projectPairDays.getOrDefault(projectPairKey, 0L) + overlappingDays;
-                        projectPairDays.put(projectPairKey, newProjectTotal);
-
-                        // Also update total across all projects
-                        totalPairDays.put(pairKey, totalPairDays.getOrDefault(pairKey, 0L) + overlappingDays);
-                    }
+        groupByProjectId(records).forEach((projectId, employees) -> {
+            for (int i = 0; i < employees.size(); i++) {
+                for (int j = i + 1; j < employees.size(); j++) {
+                    processPair(projectId, employees.get(i), employees.get(j), totalDays, projectDays);
                 }
             }
+        });
+
+        return new PairDayMaps(totalDays, projectDays);
+    }
+
+    /**
+     * Processes a single pair of employees on a project
+     */
+    private void processPair(Long projectId, EmployeeProject emp1, EmployeeProject emp2,
+                             Map<String, Long> totalDays, Map<String, Long> projectDays) {
+        long days = calculateOverlappingDays(emp1, emp2);
+        if (days > 0) {
+            String pairKey = getPairKey(emp1.getEmpId(), emp2.getEmpId());
+            // merge() adds the days to existing value or puts if absent
+            totalDays.merge(pairKey, days, Long::sum);
+            projectDays.merge(pairKey + "-" + projectId, days, Long::sum);
         }
+    }
 
-        // Step 3: Find the pair with maximum total days
-        if (totalPairDays.isEmpty()) {
-            throw new IllegalArgumentException("No overlapping work periods found between any employees.");
-        }
+    /**
+     * Builds the final response with the best employee pair
+     */
+    private EmployeePairResponse buildBestPairResponse(Map<String, Long> totalDays, Map<String, Long> projectDays) {
+        // Find the pair key with maximum days
+        String bestKey = totalDays.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElseThrow(() -> new IllegalArgumentException("No overlapping periods found"));
 
-        String bestPairKey = null;
-        Long maxDays = 0L;
-
-        for (Map.Entry<String, Long> entry : totalPairDays.entrySet()) {
-            if (entry.getValue() > maxDays) {
-                maxDays = entry.getValue();
-                bestPairKey = entry.getKey();
-            }
-        }
-
-        // Step 4: Extract employee IDs from the key
-        String[] ids = bestPairKey.split("-");
+        // Extract employee IDs from the key
+        String[] ids = bestKey.split("-");
         Long empId1 = Long.parseLong(ids[0]);
         Long empId2 = Long.parseLong(ids[1]);
 
-        // Step 5: Build the project details for the best pair
-        List<EmployeePairResponse.ProjectDetails> commonProjects = new ArrayList<>();
+        // Get all common projects for this pair
+        var projects = projectDays.entrySet().stream()
+                .filter(e -> e.getKey().startsWith(bestKey + "-"))
+                .map(e -> new EmployeePairResponse.ProjectDetails(
+                        extractProjectId(e.getKey()), e.getValue()))
+                .sorted((a, b) -> Long.compare(b.getDaysWorked(), a.getDaysWorked()))
+                .collect(Collectors.toList());
 
-        for (Map.Entry<String, Long> entry : projectPairDays.entrySet()) {
-            String key = entry.getKey();
-            if (key.startsWith(bestPairKey + "-")) {
-                String[] parts = key.split("-");
-                Long projectId = Long.parseLong(parts[2]);
-                commonProjects.add(new EmployeePairResponse.ProjectDetails(projectId, entry.getValue()));
-            }
-        }
-
-        // Sort projects by days worked (descending)
-        commonProjects.sort((a, b) -> Long.compare(b.getDaysWorked(), a.getDaysWorked()));
-
-        // Calculate total from project details (should match maxDays)
-        Long calculatedTotal = commonProjects.stream()
+        // Calculate total days from all projects
+        Long totalDaysSum = projects.stream()
                 .mapToLong(EmployeePairResponse.ProjectDetails::getDaysWorked)
                 .sum();
 
-        return new EmployeePairResponse(empId1, empId2, calculatedTotal, commonProjects);
+        return new EmployeePairResponse(empId1, empId2, totalDaysSum, projects);
+    }
+
+    /**
+     * Validates the input records
+     */
+    private void validateRecords(List<EmployeeProject> records) {
+        if (records == null || records.isEmpty()) {
+            throw new IllegalArgumentException("No records to analyze. Please provide valid employee data.");
+        }
     }
 
     /**
      * Groups all employee records by project ID
      */
     private Map<Long, List<EmployeeProject>> groupByProjectId(List<EmployeeProject> records) {
-        Map<Long, List<EmployeeProject>> projectsMap = new HashMap<>();
+        return records.stream()
+                .collect(Collectors.groupingBy(EmployeeProject::getProjectId));
+    }
 
-        for (EmployeeProject record : records) {
-            projectsMap.computeIfAbsent(record.getProjectId(), k -> new ArrayList<>()).add(record);
-        }
-
-        return projectsMap;
+    /**
+     * Extracts project ID from a project-pair key (format: "empId1-empId2-projectId")
+     */
+    private Long extractProjectId(String projectPairKey) {
+        String[] parts = projectPairKey.split("-");
+        return Long.parseLong(parts[2]);
     }
 
     /**
      * Calculates how many days two employees worked together on the same project
-     * This handles overlapping date ranges correctly
      */
     private long calculateOverlappingDays(EmployeeProject emp1, EmployeeProject emp2) {
-        // Find the later start date
-        LocalDate startDate = emp1.getDateFrom().isAfter(emp2.getDateFrom())
-                ? emp1.getDateFrom()
-                : emp2.getDateFrom();
+        LocalDate startDate = getLaterDate(emp1.getDateFrom(), emp2.getDateFrom());
+        LocalDate endDate = getEarlierDate(emp1.getDateTo(), emp2.getDateTo());
 
-        // Find the earlier end date
-        LocalDate endDate = emp1.getDateTo().isBefore(emp2.getDateTo())
-                ? emp1.getDateTo()
-                : emp2.getDateTo();
-
-        // If start date is after end date, no overlap
         if (startDate.isAfter(endDate)) {
             return 0;
         }
 
-        // Calculate days between (inclusive)
         return ChronoUnit.DAYS.between(startDate, endDate) + 1;
+    }
+
+    private LocalDate getLaterDate(LocalDate date1, LocalDate date2) {
+        return date1.isAfter(date2) ? date1 : date2;
+    }
+
+    private LocalDate getEarlierDate(LocalDate date1, LocalDate date2) {
+        return date1.isBefore(date2) ? date1 : date2;
     }
 
     /**
      * Creates a unique key for an employee pair (sorted to ensure consistency)
+     * Example: 143 and 217 -> "143-217"
      */
     private String getPairKey(Long empId1, Long empId2) {
         return empId1 < empId2

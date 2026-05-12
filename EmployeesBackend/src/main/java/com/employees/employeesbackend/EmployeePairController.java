@@ -5,6 +5,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/employees")
 @CrossOrigin(origins = "http://localhost:5173")
@@ -19,7 +21,7 @@ public class EmployeePairController {
     @PostMapping("/analyze")
     public ResponseEntity<?> analyzeCsv(@RequestParam("file") MultipartFile file) {
         try {
-            var records = csvParserService.parseCsv(file.getOriginalFilename());
+            List<EmployeeProject> records = csvParserService.parseCsv(file.getOriginalFilename());
             EmployeePairResponse result = employeePairService.findLongestWorkingPair(records);
             return ResponseEntity.ok(result);
         } catch (Exception e) {

@@ -63,7 +63,9 @@ public class CsvParserService {
         for (DateTimeFormatter formatter : DATE_FORMATTERS) {
             try {
                 return LocalDate.parse(dateStr, formatter);
-            } catch (DateTimeParseException ignored) {}
+            } catch (DateTimeParseException ignored) {
+                //try all formatters in a loop, do not fail on first one
+            }
         }
         throw new IllegalArgumentException("Unsupported date format: " + dateStr);
     }
