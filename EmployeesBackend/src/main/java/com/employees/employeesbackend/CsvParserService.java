@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class CsvParserService {
@@ -16,10 +17,14 @@ public class CsvParserService {
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE,
             DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+            DateTimeFormatter.ofPattern("yyyy.MM.dd"),
             DateTimeFormatter.ofPattern("dd-MM-yyyy"),
             DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+            DateTimeFormatter.ofPattern("dd.MM.yyyy"),
             DateTimeFormatter.ofPattern("MM-dd-yyyy"),
-            DateTimeFormatter.ofPattern("MM/dd/yyyy")
+            DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+            DateTimeFormatter.ofPattern("MM.dd.yyyy")
     );
 
     public List<EmployeeProject> parseCsv(String fileName) throws Exception {
@@ -44,13 +49,14 @@ public class CsvParserService {
                     LocalDate dateTo = parseDateOrToday(employmentDetails[3].trim());
 
                     records.add(new EmployeeProject(empId, projectId, dateFrom, dateTo));
+
                 } catch (Exception e) {
                     throw new IllegalArgumentException("Error parsing line " + lineNumber + ": " + e.getMessage());
                 }
             }
         }
 
-        return records;
+        return records.stream().distinct().toList();
     }
 
     private LocalDate parseDate(String dateStr) {

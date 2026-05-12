@@ -20,8 +20,10 @@ public class EmployeePairService {
         Map<Long, List<EmployeeProject>> projectsMap = groupByProjectId(records);
 
         // Step 2: For each project, find all employee pairs and their overlapping days
-        Map<String, Long> pairTotalDays = new HashMap<>();
-        Map<String, List<EmployeePairResponse.ProjectDetails>> pairProjectsMap = new HashMap<>();
+        // Key format: "empId1-empId2-projectId" for project-specific aggregation
+        Map<String, Long> projectPairDays = new HashMap<>();
+        // Key format: "empId1-empId2" for total across projects
+        Map<String, Long> totalPairDays = new HashMap<>();
 
         for (Map.Entry<Long, List<EmployeeProject>> entry : projectsMap.entrySet()) {
             Long projectId = entry.getKey();
@@ -38,44 +40,61 @@ public class EmployeePairService {
 
                     if (overlappingDays > 0) {
                         String pairKey = getPairKey(emp1.getEmpId(), emp2.getEmpId());
+                        String projectPairKey = pairKey + "-" + projectId;
 
-                        // Add to total days
-                        pairTotalDays.put(pairKey, pairTotalDays.getOrDefault(pairKey, 0L) + overlappingDays);
+                        // Sum days for this specific pair on this specific project
+                        // This handles multiple time periods for same pair on same project
+                        long newProjectTotal = projectPairDays.getOrDefault(projectPairKey, 0L) + overlappingDays;
+                        projectPairDays.put(projectPairKey, newProjectTotal);
 
-                        // Add to project details
-                        pairProjectsMap.computeIfAbsent(pairKey, k -> new ArrayList<>())
-                                .add(new EmployeePairResponse.ProjectDetails(projectId, overlappingDays));
+                        // Also update total across all projects
+                        totalPairDays.put(pairKey, totalPairDays.getOrDefault(pairKey, 0L) + overlappingDays);
                     }
                 }
             }
         }
 
         // Step 3: Find the pair with maximum total days
-        if (pairTotalDays.isEmpty()) {
+        if (totalPairDays.isEmpty()) {
             throw new IllegalArgumentException("No overlapping work periods found between any employees.");
         }
 
         String bestPairKey = null;
         Long maxDays = 0L;
 
-        for (Map.Entry<String, Long> entry : pairTotalDays.entrySet()) {
+        for (Map.Entry<String, Long> entry : totalPairDays.entrySet()) {
             if (entry.getValue() > maxDays) {
                 maxDays = entry.getValue();
                 bestPairKey = entry.getKey();
             }
         }
 
-        // Step 4: Extract employee IDs from the key and prepare response
+        // Step 4: Extract employee IDs from the key
         String[] ids = bestPairKey.split("-");
         Long empId1 = Long.parseLong(ids[0]);
         Long empId2 = Long.parseLong(ids[1]);
 
-        List<EmployeePairResponse.ProjectDetails> commonProjects = pairProjectsMap.get(bestPairKey);
+        // Step 5: Build the project details for the best pair
+        List<EmployeePairResponse.ProjectDetails> commonProjects = new ArrayList<>();
 
-        // Sort projects by days worked (descending) for better display
+        for (Map.Entry<String, Long> entry : projectPairDays.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith(bestPairKey + "-")) {
+                String[] parts = key.split("-");
+                Long projectId = Long.parseLong(parts[2]);
+                commonProjects.add(new EmployeePairResponse.ProjectDetails(projectId, entry.getValue()));
+            }
+        }
+
+        // Sort projects by days worked (descending)
         commonProjects.sort((a, b) -> Long.compare(b.getDaysWorked(), a.getDaysWorked()));
 
-        return new EmployeePairResponse(empId1, empId2, maxDays, commonProjects);
+        // Calculate total from project details (should match maxDays)
+        Long calculatedTotal = commonProjects.stream()
+                .mapToLong(EmployeePairResponse.ProjectDetails::getDaysWorked)
+                .sum();
+
+        return new EmployeePairResponse(empId1, empId2, calculatedTotal, commonProjects);
     }
 
     /**
@@ -93,6 +112,7 @@ public class EmployeePairService {
 
     /**
      * Calculates how many days two employees worked together on the same project
+     * This handles overlapping date ranges correctly
      */
     private long calculateOverlappingDays(EmployeeProject emp1, EmployeeProject emp2) {
         // Find the later start date

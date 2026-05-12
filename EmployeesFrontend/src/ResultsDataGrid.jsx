@@ -11,8 +11,8 @@ function ResultsDataGrid({ result }) {
         </div>
         <div className="card-body">
           <div className="alert alert-info">
-            <strong>🏆 Best Pair:</strong> Employee #{result.empId1} and Employee #{result.empId2} 
-            worked together for <strong>{result.totalDaysWorked} days</strong> in total
+            <strong>🏆 Best Pair:</strong> Employee #{result.empId1} and Employee #{result.empId2} worked
+             together for <strong>{result.totalDaysWorked} days</strong> in total
           </div>
           
           <h6 className="mt-3">📊 Common Projects Details:</h6>
