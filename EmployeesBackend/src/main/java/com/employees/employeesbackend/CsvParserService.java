@@ -68,7 +68,7 @@ public class CsvParserService {
             try {
                 return LocalDate.parse(dateStr, formatter);
             } catch (DateTimeParseException ignored) {
-                //try all formatters in a loop, do not fail on first one
+                //try all date formatters in a loop, do not fail on first one
             }
         }
         throw new IllegalArgumentException("Unsupported date format: " + dateStr);
@@ -76,7 +76,7 @@ public class CsvParserService {
 
     private LocalDate parseDateOrToday(String dateStr) {
         String trimmed = dateStr.trim();
-        if (trimmed.equalsIgnoreCase("NULL") || trimmed.isEmpty()) {
+        if (trimmed.equalsIgnoreCase("NULL")) {
             return LocalDate.now();
         }
         return parseDate(trimmed);
